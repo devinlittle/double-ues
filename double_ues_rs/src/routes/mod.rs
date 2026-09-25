@@ -1,13 +1,50 @@
 use std::sync::Arc;
 
-use axum::{Router, http::StatusCode, routing::get};
+use axum::{http::StatusCode, routing::get, Json, Router};
 use tokio::sync::broadcast;
+use utoipa::OpenApi;
+use utoipa_scalar::{Scalar, Servable};
+
+use crate::routes::chat::ChatMessage;
 
 mod chat;
 
+#[derive(OpenApi)]
+#[openapi(
+      paths(
+        crate::routes::health,
+        // Chat paths
+        crate::routes::chat::chat_ws,
+    ),
+    components(
+        schemas(
+            crate::routes::chat::ClientType,
+            crate::routes::chat::HexColor,
+            crate::routes::chat::ChatMessage,
+        )
+    ),
+    tags(
+        (name = "chat_endpoints", description = "Authentication endpoints"),
+        (name = "non_chat_related", description = "internal stuff like a health check endpoint"),
+    )
+)]
+pub struct DaApiDoc;
+
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses(
+        (status = 200, description = "Service is alive!!"),
+    ),
+    tag = "non_chat_related"
+)]
+pub async fn health() -> Result<(), StatusCode> {
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct AppState {
-    pub global_channel: Arc<broadcast::Sender<String>>,
+    pub global_channel: Arc<broadcast::Sender<ChatMessage>>,
 }
 
 pub fn create_router() -> Router {
@@ -15,12 +52,18 @@ pub fn create_router() -> Router {
 
     let app_state = AppState { global_channel };
 
+    let openapi = DaApiDoc::openapi();
+
     Router::new()
         .route("/health", get(health))
         .route("/ws/{type_of_client}", get(chat::chat_ws))
+        .route(
+            "/api-docs/openapi.json",
+            get({
+                let json_spec = openapi.clone();
+                move || async { Json(json_spec) }
+            }),
+        )
+        .merge(Scalar::with_url("/scalar", openapi))
         .with_state(app_state)
-}
-
-pub async fn health() -> Result<(), StatusCode> {
-    Ok(())
 }
