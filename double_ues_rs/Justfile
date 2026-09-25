@@ -1,0 +1,9 @@
+[private]
+default: help
+
+# shows this message
+help:
+  just --list
+
+build-windows:
+  cargo xwin build --target x86_64-pc-windows-msvc --release

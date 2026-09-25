@@ -1,0 +1,6 @@
+[private]
+default: help
+
+# shows this message
+help:
+  just --list
