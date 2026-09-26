@@ -5,5 +5,21 @@ default: help
 help:
   just --list
 
+all: build-linux-musl build-windows
+
+# Builds Static Linux executables for both x86 and arm64
+build-linux-musl:
+  @echo Building for x86_64 Linux
+  cargo zigbuild --target x86_64-unknown-linux-musl --release
+
+  @echo Building for AArch64 Linux
+  cargo zigbuild --target aarch64-unknown-linux-musl --release
+
+
+# Builds Windows executables for both x86 and arm64
 build-windows:
+  @echo Building for x86_64 Windows
   cargo xwin build --target x86_64-pc-windows-msvc --release
+
+  @echo Building for AArch64 Windows
+  cargo xwin build --target aarch64-pc-windows-msvc --release
