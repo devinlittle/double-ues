@@ -1,13 +1,15 @@
-use std::sync::Arc;
-
 use axum::{http::StatusCode, routing::get, Json, Router};
+use dashmap::DashMap;
+use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable};
+use uuid::Uuid;
 
-use crate::routes::chat::ChatMessage;
+use crate::routes::chat::{ChatMessage, UserFields};
 
 mod chat;
+mod commands;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -21,6 +23,8 @@ mod chat;
             crate::routes::chat::ClientType,
             crate::routes::chat::HexColor,
             crate::routes::chat::ChatMessage,
+            crate::routes::chat::OkayMessage,
+            crate::routes::chat::UserFields,
         )
     ),
     tags(
@@ -42,15 +46,23 @@ pub async fn health() -> Result<(), StatusCode> {
     Ok(())
 }
 
+type GlobalChannel = Arc<broadcast::Sender<ChatMessage>>;
+type UserSettings = Arc<DashMap<Uuid, Arc<RwLock<UserFields>>>>;
+
 #[derive(Clone)]
 pub struct AppState {
-    pub global_channel: Arc<broadcast::Sender<ChatMessage>>,
+    pub global_channel: GlobalChannel,
+    pub users: UserSettings,
 }
 
 pub fn create_router() -> Router {
     let global_channel = Arc::new(broadcast::Sender::new(256));
+    let users = Arc::new(DashMap::new());
 
-    let app_state = AppState { global_channel };
+    let app_state = AppState {
+        global_channel,
+        users,
+    };
 
     let openapi = DaApiDoc::openapi();
 

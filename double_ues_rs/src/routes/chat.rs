@@ -6,6 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, RwLock};
 use tracing::info;
 use utoipa::ToSchema;
 
@@ -21,7 +22,7 @@ pub enum ClientType {
 pub struct HexColor(pub u8, pub u8, pub u8);
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct OnboardFields {
+pub struct UserFields {
     pub username: String,
     pub username_color: HexColor,
     pub message_font: String,
@@ -33,6 +34,30 @@ pub struct ChatMessage {
     pub username_color: HexColor,
     pub message: String,
     pub message_font: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct OkayMessage {
+    pub ok: ThisIsOk,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub enum ThisIsOk {
+    OK,
+}
+
+static SYSTEM_USERNAME: &str = "SYSTEM";
+static SYSTEM_FONT: &str = "Impact";
+
+impl ChatMessage {
+    pub fn system_chat(message: String) -> ChatMessage {
+        Self {
+            username: SYSTEM_USERNAME.to_string(),
+            username_color: HexColor(255, 179, 0),
+            message,
+            message_font: SYSTEM_FONT.to_string(),
+        }
+    }
 }
 
 #[allow(clippy::needless_return)]
@@ -63,22 +88,49 @@ pub async fn chat_ws(
                     return;
                 }
 
-                let Some(onboard_fields_json) = msg.find(": ").map(|x| &msg[x + 2..]) else {
+                let Some(user_fields_json) = msg.find(": ").map(|x| &msg[x + 2..]) else {
                     return;
                 };
 
-                let Ok(onbaord_fields) = serde_json::from_str::<OnboardFields>(onboard_fields_json) else {return ;};
+                let Ok(user_fields) = serde_json::from_str::<UserFields>(user_fields_json) else {return ;};
+                let their_uuid = uuid::Uuid::new_v4();
+                state.users.insert(their_uuid, Arc::new(RwLock::new(user_fields)));
 
-                info!("{:?} is conected to the chat", onbaord_fields.username);
+                let user_settings = if let Some(read) = state.users.get(&their_uuid) {
+                    let read = match read.read() {
+                        Ok(read) => read,
+                        Err(poisoned) => {
+                            tracing::error!("LOCK POISONED FOR USER {}", their_uuid);
+                            poisoned.into_inner()
+                        }
+                    };
+
+                    read.clone()
+                } else {
+                    return;
+                };
+
 
                 let global_tx = state.global_channel;
+
+                let announcement = format!("{:?} joined the chat", user_settings.username);
+
+                info!(announcement);
+                let _ =  global_tx.send(ChatMessage::system_chat(announcement));
+
+                let Ok(okay_string) = serde_json::to_string(&OkayMessage {ok: ThisIsOk::OK}) else {return;};
+                dbg!(&okay_string);
+                let _ = socket.send(okay_string.into()).await;
 
                 while let Some(Ok(msg)) = socket.recv().await {
                     match msg {
                         Text(some_text) => {
+                            // TODO: have a command system implimented, where users can change
+                            // things with the stream/their onboard_fields
+
                             let plaintext = some_text.to_string();
 
-                            let fields = onbaord_fields.clone();
+                            let fields = user_settings.clone();
 
                             let chat = ChatMessage {
                                 username: fields.username,
@@ -88,16 +140,22 @@ pub async fn chat_ws(
                             };
 
                             if global_tx.send(chat).is_err() {
-                                return;
+                                break;
                             }
                         }
                         _ => {
-                            return;
+                            break;
                         }
                     }
                 }
 
-                info!("{:?} is disconnect to the chat", onbaord_fields.username);
+
+                let announcement = format!("{:?} left the chat", user_settings.username); 
+
+                info!(announcement);
+                if global_tx.send(ChatMessage::system_chat(announcement)).is_err() {
+                    return;
+                }
             }
             ClientType::ChatFrontend => {
                 let mut chat_rx = state.global_channel.subscribe();
