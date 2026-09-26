@@ -119,7 +119,6 @@ pub async fn chat_ws(
                 let _ =  global_tx.send(ChatMessage::system_chat(announcement));
 
                 let Ok(okay_string) = serde_json::to_string(&OkayMessage {ok: ThisIsOk::OK}) else {return;};
-                dbg!(&okay_string);
                 let _ = socket.send(okay_string.into()).await;
 
                 while let Some(Ok(msg)) = socket.recv().await {
@@ -139,9 +138,7 @@ pub async fn chat_ws(
                                 message_font: fields.message_font,
                             };
 
-                            if global_tx.send(chat).is_err() {
-                                break;
-                            }
+                             let _  = global_tx.send(chat);
                         }
                         _ => {
                             break;
