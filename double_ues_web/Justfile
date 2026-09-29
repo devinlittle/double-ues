@@ -4,3 +4,6 @@ default: help
 # shows this message
 help:
   just --list
+
+update_openapi:
+  ./scripts/update-types.sh

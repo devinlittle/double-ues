@@ -1,89 +1,101 @@
-<script>
-  import svelteLogo from './assets/svelte.svg'
-  import viteLogo from './assets/vite.svg'
-  import heroImg from './assets/hero.png'
-  import Counter from './lib/Counter.svelte'
+<script lang="ts">
+  // RECEIVER STUFF BEGIN
+  import { onMount } from "svelte";
+  import {
+    receive_from_chat,
+    chat_messages,
+    connect_to_quick_add,
+    sendOnboardingInfo,
+    socketSend,
+  } from "./lib/chat_handler.svelte";
+
+  import type { components } from "./lib/types/chat.api";
+  type RgbColor = components["schemas"]["RgbColor"];
+
+  //  $inspect(chat_messages);
+
+  onMount(async () => {
+    await receive_from_chat();
+  });
+  // RECEIVER STUFF END
+
+  // you send? BEGIN
+  onMount(async () => {
+    await connect_to_quick_add();
+  });
+
+  let onboarded = $state<boolean>(false);
+  let username = $state<string>("");
+  let username_color = $state("#ff0000");
+  let message_font = $state<string>("");
+
+  function fullHex(hex: string): RgbColor {
+    let r = hex.slice(1, 2);
+    let g = hex.slice(2, 3);
+    let b = hex.slice(3, 4);
+
+    return [parseInt(r + r, 16), parseInt(g + g, 16), parseInt(b + b, 16)];
+  }
+
+  function hex2rgb(hex: string): RgbColor {
+    if (hex.length === 4) {
+      return fullHex(hex);
+    }
+
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+
+    // return {r, g, b}
+    return [r, g, b];
+  }
+
+  const doTheSend = () => {
+    if (
+      sendOnboardingInfo({
+        username: username,
+        username_color: hex2rgb(username_color),
+        message_font: message_font,
+      })
+    ) {
+      onboarded = true;
+    }
+  };
+
+  let messageToSend = $state<string>("");
+
+  const sendMessage = () => {
+    socketSend(messageToSend);
+  };
+
+  // you send? END
 </script>
 
-<section id="center">
-  <div class="hero">
-    <img src={heroImg} class="base" width="170" height="179" alt="" />
-    <img src={svelteLogo} class="framework" alt="Svelte logo" />
-    <img src={viteLogo} class="vite" alt="Vite logo" />
-  </div>
+{#each chat_messages as chat}
   <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/App.svelte</code> and save to test <code>HMR</code></p>
+    <span style="color: rgb({chat.username_color.join(', ')});">
+      {chat.username}:
+    </span>
+    <span style="font-family: {chat.message_font};">
+      {chat.message}
+    </span>
   </div>
-  <Counter />
-</section>
+{/each}
 
-<div class="ticks"></div>
-
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#documentation-icon"></use>
-    </svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank" rel="noreferrer">
-          <img class="logo" src={viteLogo} alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://svelte.dev/" target="_blank" rel="noreferrer">
-          <img class="button-icon" src={svelteLogo} alt="" />
-          Learn more
-        </a>
-      </li>
-    </ul>
+{#if !onboarded}
+  <input type="color" bind:value={username_color} />
+  <input type="text" bind:value={username} placeholder="username" />
+  <input type="text" bind:value={message_font} placeholder="font" />
+  <button onclick={doTheSend}>PLEASE CLICK</button>
+{:else}
+  <div class="textBox">
+    <form
+      onsubmit={(e) => {
+        e.preventDefault();
+      }}
+    >
+      <input type="text" bind:value={messageToSend} />
+      <button onclick={sendMessage}>=></button>
+    </form>
   </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#social-icon"></use>
-    </svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li>
-        <a href="https://github.com/vitejs/vite" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#github-icon"></use>
-          </svg>
-          GitHub
-        </a>
-      </li>
-      <li>
-        <a href="https://chat.vite.dev/" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#discord-icon"></use>
-          </svg>
-          Discord
-        </a>
-      </li>
-      <li>
-        <a href="https://x.com/vite_js" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#x-icon"></use>
-          </svg>
-          X.com
-        </a>
-      </li>
-      <li>
-        <a href="https://bsky.app/profile/vite.dev" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#bluesky-icon"></use>
-          </svg>
-          Bluesky
-        </a>
-      </li>
-    </ul>
-  </div>
-</section>
-
-<div class="ticks"></div>
-<section id="spacer"></section>
+{/if}
