@@ -1,7 +1,7 @@
 use axum::{
     extract::{
-        ws::Message::{self, Text},
         Path, State, WebSocketUpgrade,
+        ws::Message::{self, Text},
     },
     response::IntoResponse,
 };
@@ -19,19 +19,19 @@ pub enum ClientType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct HexColor(pub u8, pub u8, pub u8);
+pub struct RgbColor(pub u8, pub u8, pub u8);
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct UserFields {
     pub username: String,
-    pub username_color: HexColor,
+    pub username_color: RgbColor,
     pub message_font: String,
 }
 
 #[derive(Serialize, Debug, Clone, ToSchema)]
 pub struct ChatMessage {
     pub username: String,
-    pub username_color: HexColor,
+    pub username_color: RgbColor,
     pub message: String,
     pub message_font: String,
 }
@@ -53,7 +53,7 @@ impl ChatMessage {
     pub fn system_chat(message: String) -> ChatMessage {
         Self {
             username: SYSTEM_USERNAME.to_string(),
-            username_color: HexColor(255, 179, 0),
+            username_color: RgbColor(255, 179, 0),
             message,
             message_font: SYSTEM_FONT.to_string(),
         }
@@ -92,9 +92,13 @@ pub async fn chat_ws(
                     return;
                 };
 
-                let Ok(user_fields) = serde_json::from_str::<UserFields>(user_fields_json) else {return ;};
+                let Ok(user_fields) = serde_json::from_str::<UserFields>(user_fields_json) else {
+                    return;
+                };
                 let their_uuid = uuid::Uuid::new_v4();
-                state.users.insert(their_uuid, Arc::new(RwLock::new(user_fields)));
+                state
+                    .users
+                    .insert(their_uuid, Arc::new(RwLock::new(user_fields)));
 
                 let user_settings = if let Some(read) = state.users.get(&their_uuid) {
                     let read = match read.read() {
@@ -110,15 +114,17 @@ pub async fn chat_ws(
                     return;
                 };
 
-
                 let global_tx = state.global_channel;
 
                 let announcement = format!("{:?} joined the chat", user_settings.username);
 
                 info!(announcement);
-                let _ =  global_tx.send(ChatMessage::system_chat(announcement));
+                let _ = global_tx.send(ChatMessage::system_chat(announcement));
 
-                let Ok(okay_string) = serde_json::to_string(&OkayMessage {ok: ThisIsOk::OK}) else {return;};
+                let Ok(okay_string) = serde_json::to_string(&OkayMessage { ok: ThisIsOk::OK })
+                else {
+                    return;
+                };
                 let _ = socket.send(okay_string.into()).await;
 
                 while let Some(Ok(msg)) = socket.recv().await {
@@ -138,7 +144,7 @@ pub async fn chat_ws(
                                 message_font: fields.message_font,
                             };
 
-                             let _  = global_tx.send(chat);
+                            let _ = global_tx.send(chat);
                         }
                         _ => {
                             break;
@@ -146,11 +152,13 @@ pub async fn chat_ws(
                     }
                 }
 
-
-                let announcement = format!("{:?} left the chat", user_settings.username); 
+                let announcement = format!("{:?} left the chat", user_settings.username);
 
                 info!(announcement);
-                if global_tx.send(ChatMessage::system_chat(announcement)).is_err() {
+                if global_tx
+                    .send(ChatMessage::system_chat(announcement))
+                    .is_err()
+                {
                     return;
                 }
             }
@@ -158,7 +166,9 @@ pub async fn chat_ws(
                 let mut chat_rx = state.global_channel.subscribe();
 
                 while let Ok(msg) = chat_rx.recv().await {
-                    let Some(chat) = serde_json::to_string(&msg).ok() else { return;};
+                    let Some(chat) = serde_json::to_string(&msg).ok() else {
+                        return;
+                    };
                     if socket.send(Message::Text(chat.into())).await.is_err() {
                         break;
                     }

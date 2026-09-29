@@ -5,6 +5,7 @@ default: help
 help:
   just --list
 
+# Builds for all platforms
 all: build-linux-musl build-windows
 
 # Builds Static Linux executables for both x86 and arm64

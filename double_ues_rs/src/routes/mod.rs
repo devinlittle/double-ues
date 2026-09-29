@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, routing::get, Json, Router};
+use axum::{Json, Router, http::StatusCode, routing::get};
 use dashmap::DashMap;
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
@@ -21,7 +21,7 @@ mod commands;
     components(
         schemas(
             crate::routes::chat::ClientType,
-            crate::routes::chat::HexColor,
+            crate::routes::chat::RgbColor,
             crate::routes::chat::ChatMessage,
             crate::routes::chat::OkayMessage,
             crate::routes::chat::UserFields,
